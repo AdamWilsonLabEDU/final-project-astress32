@@ -1,1 +1,1 @@
-Sitemap: https://AdamWilsonLabEDU.github.io/2024-geo511-spatial-data-science-final-project-GEO511_QuartoProjectTemplate/sitemap.xml
+Sitemap: https://AdamWilsonLabEDU.github.io/final-project-astress32/sitemap.xml
