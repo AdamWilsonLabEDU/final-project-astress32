@@ -1,6 +1,6 @@
 ---
 title: "My Final Project Template"
-author: Your name here
+author: Abby Stressinger
 subtitle: Subtitle here if desired
 date: today
 date-format: long
@@ -36,8 +36,43 @@ You can do numbers like this:
 
 See <http://rmarkdown.rstudio.com/> for all the amazing things you can do.
 
-Here's my first code chunk.
+```{r setup}
+#install.packages("sf")
+#install.packages("tibble")
+#install.packages("dplyr")
+#install.packages("leaflet")
+library(sf)
+library(tibble)
+library(dplyr)
+library(leaflet)
 
+```
+
+unnamed chunk problem - find index_cache file and delete
+
+```{r data}
+data <- read.csv("ghgp_data_2023_NY.csv")
+
+#change column names and delete NA rows
+colnames <- data[3,]
+
+data2 <- data[-(1:3),]
+
+colnames(data2) = colnames
+
+#filter to only NYS
+#convert data to a sf object
+data_NY <- filter(data2, State == "NY")
+
+str(data_NY_sf) #check that is shapefile, coordinate system, bounding box
+data_NY_sf <- st_as_sf(data_NY, coords=c("Longitude", "Latitude"), crs = 4326)
+
+leaflet(data_NY_sf) %>%
+  addTiles() %>%
+  addCircleMarkers()
+```
+
+Here's my first code chunk.
 ```{r}
 x=3+4
 ```
