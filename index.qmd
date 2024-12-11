@@ -1,155 +1,242 @@
 ---
-title: "My Final Project Template"
+title: "Potential locations for microalgae-based carbon capture facilities in NYS"
 author: Abby Stressinger
-subtitle: Subtitle here if desired
+subtitle: Final Project for GEO511:Spatial Science
 date: today
 date-format: long
+output: 
+  html_document:
+  theme: cosmo
+  code_folding: TRUE
 ---
 
 # Introduction
 
-\[\~ 200 words\]
+Microalgae cultivation for carbon dioxide removal is a potential solution for the climate crisis. Through photosynthesis, microalgae convert carbon dioxide into biomass at rates 10-50x more efficient than land plants. Developing technologies that utilize microalgae for carbon dioxide removal follow two main systems: open and closed systems. Closed systems are those in which inputs (sunlight, nutrients, CO2, water) and growth conditions (temperature, pH, salinity, flow/mixing) are controlled. Assessing optimal locations for closed systems is helpful to determine the long-term scalability and market potential of this technology. To determine optimal locations, multiple factors should be analyzed: biotic (sunlight, air and water temperature) and abiotic factors (carbon sources, land availability, water availability, and economic feasibility). 
 
-Clearly stated background and questions / hypotheses / problems being addressed. Sets up the analysis in an interesting and compelling way. Include figures if you like.
+For this project, I will assess **potential locations for microalgae-based carbon capture** based on location of carbon point sources and water availability. These factors greatly influence the potential for success of algal biorefineries, since carbon and water are the main controllable  inputs for algal growth. 
+
+I will investigate the following **research questions:**
+
+1. What is the distribution of wastewater facilities across NYS? How does will this compare to carbon sources?
+
+2. What is the distribution of point carbon sources across NYS? How does this compare to across the US? How does this compare to distribution of "high-purity" carbon sources?
+
+3. Based on carbon and water availability, which locations across NYS are best suited for microalgae-based carbon capture?
+
 
 # Materials and methods
 
-\[\~ 200 words\]
+## Data Collection
 
-Narrative: Clear narrative description of the data sources and methods. Includes data from at least two sources that were integrated / merged in R.
+#### Wastewater Facilites
+Data on water availability was collected from wastewater facility data from <https://data.ny.gov>. This data provides information on wastewater treatment plants across NYS. This specific dataset can be downloaded here: <https://data.ny.gov/Energy-Environment/Wastewater-Treatment-Plants/2v6p-juki/about_data>.
 
-Code: The code associated with the project is well organized and easy to follow. Demonstrates mastery of R graphics and functions.
+#### Carbon Point Sources
+Data on carbon sources were obtained from the Environmental Protection Agency 2018 Greenhouse Gas Reporting Program (GHGRP) dataset. This data was filtered by high purity source: Ammonia production, steam methane reforming, and extended to petroleum and natural gas systems (medium purity) for the purpose of applying to NYS. This data is available here: <https://www.epa.gov/ghgreporting>
 
-Data: The underlying data are publicly accessible via the web and downloaded/accessed within the Rmd script. If you want to use your own data, you must make it available on a website (e.g. Figshare) so that others are able to re-run your code.
+## Download and Clean Data
 
-You can do bullets like this:
+Load packages and libraries
 
--   The first most important thing
--   The second most important thing
--   The third most important thing
-
-You can do numbers like this:
-
-1.  The first most important thing
-2.  The second most important thing
-3.  The third most important thing
-
-See <http://rmarkdown.rstudio.com/> for all the amazing things you can do.
-
-```{r setup}
+```{r setup, message = FALSE, warning = FALSE, echo = FALSE}
 #install.packages("sf")
 #install.packages("tibble")
 #install.packages("dplyr")
 #install.packages("leaflet")
+#install.packages("ggplot2")
+#install.packages("rnaturalearth")
+#install.packages("usmap")
+#install.packages("mapdata")
+#install.packages("maps")
+#install.packages("viridis")
+#install.packages("spData")
+
 library(sf)
 library(tibble)
 library(dplyr)
 library(leaflet)
-
+library(ggplot2)
+library(rnaturalearth)
+library(usmap)
+library(mapdata)
+library(maps)
+library(viridis)
+library(spData)
 ```
 
-unnamed chunk problem - find index_cache file and delete
+#### Load in and Clean Wastewater Data
 
 ```{r data}
-data <- read.csv("ghgp_data_2023_NY.csv")
+#from https://data.ny.gov/Energy-Environment/Wastewater-Treatment-Plants/2v6p-juki/about_data
+data_water <- read.csv("data/Wastewater_Treatment_Plants_20241205.csv")
+data_water_NY_sf <- data_water %>%
+  filter(!is.na(Longitude) & !is.na(Latitude)) %>%
+  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326)
 
-#change column names and delete NA rows
-colnames <- data[3,]
-
-data2 <- data[-(1:3),]
-
-colnames(data2) = colnames
-
-#filter to only NYS
-#convert data to a sf object
-data_NY <- filter(data2, State == "NY")
-
-str(data_NY_sf) #check that is shapefile, coordinate system, bounding box
-data_NY_sf <- st_as_sf(data_NY, coords=c("Longitude", "Latitude"), crs = 4326)
-
-leaflet(data_NY_sf) %>%
-  addTiles() %>%
-  addCircleMarkers()
+#Load in US country and border data
+      #Load in US States data
+      data(world)
+      data(us_states)
+      US_outline <- world %>%
+        filter(name_long == "United States") %>%
+        st_transform(crs = 4326)
+      
+      New_York <- us_states %>%
+        filter(NAME == "New York") %>%
+        st_transform(crs = 4326)
 ```
 
-Here's my first code chunk.
-```{r}
-x=3+4
-```
-
-Refer to output in your narrative like this: x=`r x` .
-
-Load any required packages in a code chunk (you may need to install some packages):
-
-```{r, message=F, warning=F}
-library(tidyverse)
-library(leaflet)
-library(kableExtra)
-library(htmlwidgets)
-library(widgetframe)
-knitr::opts_chunk$set(widgetframe_widgets_dir = 'widgets' ) 
-knitr::opts_chunk$set(cache=TRUE)  # cache the results for quick compiling
-```
-
-## Download and clean all required data
+Filter and Plot largest facilities:
 
 ```{r}
-n=20
-data=data.frame(x=runif(n,-180,180),
-                y=runif(n,-60,60),
-                size = runif(n, 5, 20),
-                category = factor(
-                  sample(letters[1:5], n, replace = TRUE)
-                  ),
-                value = rnorm(n))
+#Filter to largest facilities
+  #filter to plants about the mean flow
+  summary(data_water_NY_sf$Average.Design.Hydraulic.Flow)
+
+  data_water_NY_above_mean <-
+    filter(data_water_NY_sf, Average.Design.Hydraulic.Flow > 13.89)
+
+  #Plot largest facilities
+  #ggplot(data_water_NY_above_mean) + geom_sf(aes(color = `Plant.Type`))
+  
+   ggplot(data_water_NY_above_mean) +
+        geom_sf(aes(color = `Plant.Type`)) +
+      geom_sf(data = New_York, fill = NA) +
+     labs(title = "Large Wastewater Facilites in NYS (2023)",
+          subtitle = "Facilities with above average hydraulic flow")
+          
 ```
 
-```{r, results='asis'}
-data %>% 
-  slice(1:10) %>% #show only 1:n rows
-  kable(digits=2,align="c")%>% #make table and round to two digits
-  kable_styling(bootstrap_options = 
-                  c("striped", "hover", "condensed", "responsive")) #apply other formatting
+#### Load in and Clean Carbon Data
+
+Clean and filter US data
+```{r}
+data <- read.csv("data/ghgp_data_2023_NY.csv")
+
+#Clean up dataset for Entire US
+  #change column names and delete NA rows
+  colnames <- data[3,]
+  data2 <- data[-(1:3),]
+  colnames(data2) = colnames
+
+  #Filter out empty rows, and empty long/lat rows
+  data_US <- data2[1:6470, ] %>%
+   filter(!is.na(Longitude) & !is.na(Latitude)) #too many points
+
+    #check for missing values
+    #MISSING_COORD <- is.na(data3$Longitude)
+                 #is.na(data3$Latitude)
+      #sum(MISSING_COORD$TRUE) #0
+
+  #Transform to shapefile with geometry
+  data_US_sf <- st_as_sf(data_US, coords = c("Longitude", "Latitude"), crs = 4326)
+
+  #filter by emissions type (pure carbon sources)
+  data_US_pure_carbon <- data_US_sf %>%
+   filter(`Industry Type (subparts)`== "P" | 
+            `Industry Type (subparts)`== "G" | 
+            `Industry Type (subparts)`== "C,W-NGTC")
+      #no ammonia plants in US?
 ```
 
-Add any additional processing steps here.
+Clean and filter NY Data
+```{r}
+#Filter dataset to only NY
+  #convert data to a sf object
+  data_NY <- filter(data2, State == "NY")
+
+  #str(data_NY_sf) #check that is shapefile, coordinate system, bounding box
+  data_NY_sf <- st_as_sf(data_NY, coords=c("Longitude", "Latitude"), crs = 4326)
+
+    #filter NY to high purity carbon sources
+  data_NY_pure_carbon <- data_NY_sf %>%
+    filter(`Industry Type (subparts)`== "P" | 
+             `Industry Type (subparts)`== "G" | 
+             `Industry Type (subparts)`== "C,W-NGTC")
+
+```
+
+Plot all US Carbon Sources
+
+```{r}
+
+```
+
+Plot high-purity US Carbon Sources
+
+```{r}
+ggplot() +
+  geom_sf(data = US_outline, fill = NA) +
+  geom_sf(data = data_US_pure_carbon, 
+          aes(color = "Industry Type (subparts)", 
+              size = "Total reported direct emissions")) +
+  guides(size = FALSE) +
+  labs(title = "High-purity carbon sources across US")
+```
+
 
 # Results
 
-\[\~200 words\]
+The plots below visualize the locations of wastewater and carbon source data for NYS. In the last plot, we see multiple areas suitable for microalgae-cultivation, due to overlap of these locations. These locations are specified in the Conclusion.
 
-Tables and figures (maps and other graphics) are carefully planned to convey the results of your analysis. Intense exploration and evidence of many trials and failures. The author looked at the data in many different ways before coming to the final presentation of the data.
+#### Map Carbon Emissions and Wastewater Data
 
-Show tables, plots, etc. and describe them.
-
-```{r, fig.width=6, fig.height=3, fig.cap="Map of completely random data"}
-m <- leaflet(data) %>% 
-  addTiles() %>% 
-  addCircleMarkers(~x, ~y, radius = ~size,color = ~as.factor(category)) %>% 
-  addPopups(~x[2], ~y[2], "Random popup")
-m  # a map with the default OSM tile layer
-```
+Map all of carbon point sources in NY
 
 ```{r}
-data %>% 
-  ggplot(aes(x=x,y=y,col=category))+
-  geom_point()
+#Map all of carbon emissions in NY
+ggplot() +
+  geom_sf(data = New_York, fill = NA) +
+  geom_sf(data = data_NY_sf, aes(color = `Industry Type (sectors)`,
+              size = `Total reported direct emissions`)) +
+  guides(size = FALSE) +
+  labs(title = "All Carbon Point Sources in NY",
+       subtitle = "(2023)")
 ```
 
-### Dygraphs Example
+Map only high purity sources in NY
 
 ```{r}
-library(dygraphs)
-dygraph(nhtemp, main = "New Haven Temperatures") |> 
-  dyRangeSelector(dateWindow = c("1920-01-01", "1960-01-01")) 
+ggplot() +
+  geom_sf(data = New_York, fill = NA) +
+  geom_sf(data = data_NY_pure_carbon, 
+          aes(color = `Industry Type (sectors)`,
+          size = `Total reported direct emissions`)) +
+  guides(size = FALSE) +
+  labs(title = "High-Purity Carbon Point Sources in NY",
+       subtitle = "(2023)")
 ```
+
+##### Overlay Map
+
+```{r}
+ggplot() +
+  geom_sf(data = New_York, fill = NA) +
+  geom_sf(data = data_NY_pure_carbon, 
+          aes(color = `Industry Type (sectors)`,
+          size = `Total reported direct emissions`)) +
+  guides(size = FALSE) +
+  geom_sf(data = data_water_NY_above_mean, 
+          aes(color = "Plant.Type")) +
+  scale_fill_manual(name = "Industry Type", 
+                    labels = c("Petroleum and Natural Gas Systems: High Purity Source", 
+                               "High Volume Wastewater Facilities")) +
+  labs(title = "Locations of suitable Wastewater and Carbon sources",
+       subtitle = "For microalgae-cultivation in NY (2023)") 
+```
+
+Analyze futher with clustering analysis: determine top locations from clusters of water and carbon sources. 
+
+Add in Leaflet Plot.
 
 # Conclusions
 
-\[\~200 words\]
+Top locations for algae cultivation sites are noted by overlap of plotted points. 
 
-Clear summary adequately describing the results and putting them in context. Discussion of further questions and ways to continue investigation.
+distance matrix - points withing certain distance of each other
+add image, add table, 
+
 
 # References
 
-All sources are cited in a consistent manner
