@@ -5,9 +5,8 @@ subtitle: Final Project for GEO511:Spatial Science
 date: today
 date-format: long
 output: 
-  html_document:
-  theme: cosmo
-  code_folding: TRUE
+  html_document: 
+    code-fold: true
 ---
 
 # Introduction
@@ -37,7 +36,6 @@ Data on carbon sources were obtained from the Environmental Protection Agency 20
 
 ## Download and Clean Data
 
-Load packages and libraries
 
 ```{r setup, message = FALSE, warning = FALSE, echo = FALSE}
 #install.packages("sf")
@@ -51,6 +49,9 @@ Load packages and libraries
 #install.packages("maps")
 #install.packages("viridis")
 #install.packages("spData")
+#install.packages("knitr")
+#install.packages("kable")
+#install.packages("kableExtra")
 
 library(sf)
 library(tibble)
@@ -63,6 +64,8 @@ library(mapdata)
 library(maps)
 library(viridis)
 library(spData)
+library(knitr)
+library(kableExtra)
 ```
 
 #### Load in and Clean Wastewater Data
@@ -87,30 +90,30 @@ data_water_NY_sf <- data_water %>%
         st_transform(crs = 4326)
 ```
 
+
 Filter and Plot largest facilities:
 
 ```{r}
 #Filter to largest facilities
   #filter to plants about the mean flow
-  summary(data_water_NY_sf$Average.Design.Hydraulic.Flow)
+  #summary(data_water_NY_sf$Average.Design.Hydraulic.Flow)
 
   data_water_NY_above_mean <-
     filter(data_water_NY_sf, Average.Design.Hydraulic.Flow > 13.89)
 
-  #Plot largest facilities
-  #ggplot(data_water_NY_above_mean) + geom_sf(aes(color = `Plant.Type`))
-  
+#Plot largest facilities
    ggplot(data_water_NY_above_mean) +
         geom_sf(aes(color = `Plant.Type`)) +
       geom_sf(data = New_York, fill = NA) +
-     labs(title = "Large Wastewater Facilites in NYS (2023)",
-          subtitle = "Facilities with above average hydraulic flow")
+     labs(title = "1. Large wastewater facilities in NYS (2023)")
           
 ```
+Note that the largest wastewater facilites were selected by the facilities with above average hydraulic flow.
+
 
 #### Load in and Clean Carbon Data
 
-Clean and filter US data
+United States Data
 ```{r}
 data <- read.csv("data/ghgp_data_2023_NY.csv")
 
@@ -140,7 +143,7 @@ data <- read.csv("data/ghgp_data_2023_NY.csv")
       #no ammonia plants in US?
 ```
 
-Clean and filter NY Data
+New York Data
 ```{r}
 #Filter dataset to only NY
   #convert data to a sf object
@@ -154,14 +157,13 @@ Clean and filter NY Data
     filter(`Industry Type (subparts)`== "P" | 
              `Industry Type (subparts)`== "G" | 
              `Industry Type (subparts)`== "C,W-NGTC")
+  
+knitr::kable(head(data_NY_pure_carbon[ ,1:15]), "pipe", 
+             caption = "Table of high-purity carbon sources in New York") %>%
+  kable_styling(font_size = 10)
 
 ```
 
-Plot all US Carbon Sources
-
-```{r}
-
-```
 
 Plot high-purity US Carbon Sources
 
@@ -172,7 +174,7 @@ ggplot() +
           aes(color = "Industry Type (subparts)", 
               size = "Total reported direct emissions")) +
   guides(size = FALSE) +
-  labs(title = "High-purity carbon sources across US")
+  labs(title = "2. High-purity carbon sources across US") + theme(legend.position = "none")
 ```
 
 
@@ -182,8 +184,6 @@ The plots below visualize the locations of wastewater and carbon source data for
 
 #### Map Carbon Emissions and Wastewater Data
 
-Map all of carbon point sources in NY
-
 ```{r}
 #Map all of carbon emissions in NY
 ggplot() +
@@ -191,11 +191,9 @@ ggplot() +
   geom_sf(data = data_NY_sf, aes(color = `Industry Type (sectors)`,
               size = `Total reported direct emissions`)) +
   guides(size = FALSE) +
-  labs(title = "All Carbon Point Sources in NY",
-       subtitle = "(2023)")
+  labs(title = "3. All carbon point sources in NYS (2023)")
 ```
 
-Map only high purity sources in NY
 
 ```{r}
 ggplot() +
@@ -204,9 +202,11 @@ ggplot() +
           aes(color = `Industry Type (sectors)`,
           size = `Total reported direct emissions`)) +
   guides(size = FALSE) +
-  labs(title = "High-Purity Carbon Point Sources in NY",
-       subtitle = "(2023)")
+  labs(title = "4. High-purity carbon point sources in NYS (2023)") +
+  theme(legend.position = "none")
 ```
+Note that all of the high purity sources or carbon in New York State are Petroleum and Natural Gas Systems.
+
 
 ##### Overlay Map
 
@@ -222,21 +222,65 @@ ggplot() +
   scale_fill_manual(name = "Industry Type", 
                     labels = c("Petroleum and Natural Gas Systems: High Purity Source", 
                                "High Volume Wastewater Facilities")) +
-  labs(title = "Locations of suitable Wastewater and Carbon sources",
-       subtitle = "For microalgae-cultivation in NY (2023)") 
+  labs(title = "5. Locations of suitable wastewater and carbon\nsources for microalgae cultivation in NYS (2023)")
 ```
 
-Analyze futher with clustering analysis: determine top locations from clusters of water and carbon sources. 
+#### Select top locations via a distance buffer
 
-Add in Leaflet Plot.
+Buffer the carbon sources by 10,000 meters, and select wastewater facilities within this distance.
+
+```{r}
+#df1 = data_NY_pure_carbon
+#df2 = data_water_NY_above_mean
+
+#Create a new dataframe of distances between pure carbon and large water sources
+distance_bt_points <- st_distance(data_NY_pure_carbon, data_water_NY_above_mean)
+
+#Set distance buffer around carbon sources to be 10,000 m
+buffered_carbon <- st_buffer(data_NY_pure_carbon, 10000)
+#plot (buffered_carbon)
+
+buffered_carbon_and_water <- st_intersection(buffered_carbon, data_water_NY_above_mean)
+```
+
+```{r}
+ggplot() +
+  geom_sf(data = buffered_carbon, aes(color = "lightblue"))+
+  geom_sf(data = buffered_carbon_and_water, aes(color = "red")) +
+  geom_sf(data = New_York, fill = NA) +
+  theme(legend.position = "none") +
+  labs(title = "6. Location of Wastewater Plants\nwithin 10,000m of Carbon Sources")
+
+```
+
+List the top locations:
+```{r}
+buffered_table <- buffered_carbon_and_water[c("Facility.Name.1", "City", "State", "Address", "County", "Industry.Type..sectors.", "Total.reported.direct.emissions")]
+
+knitr::kable(buffered_table, 
+             col.names = c('Facility Name', 'City', 'State', 'Address', 'County', 'Industry Type', "Total Reported Direct Emissions", 'Geometry'),
+             caption = "Top Five Point Carbon Locations in NYS within distance of a wastewater treatment plant") %>%
+  kable_styling(font_size = 8)
+
+```
+
 
 # Conclusions
 
-Top locations for algae cultivation sites are noted by overlap of plotted points. 
+The top locations for algae cultivation sites are noted by the overlap of plotted points in Plot 6. These locations represent areas in which a large wastewater plant was within 10,000 meters of a high-purity carbon source. The distance buffer of 10,000 meters is equivalent to about 6 miles, and was used since it gave an output of top three areas of overlapping points. These three areas are determined to be the most suitable locations for microalgae-based carbon capture (under our limited research scope). The three areas are listed below.
 
-distance matrix - points withing certain distance of each other
-add image, add table, 
+**1. Stony Point, NY**
 
+**2. Corning, NY**
+
+**3. Lockport, NY**
+
+My study provides a preliminary analysis to assessing optimal locations for microalgae-cultivation in New York State. Future research will incorporate more variables (e.g. sunlight availability, local climate, land availability, and economic feasibility).
 
 # References
+Ou, L., Banerjee, S., Xu, H., Coleman, A. M., Cai, H., Lee, U., Wigmosta, M. S., & Hawkins, T. R. (2021). Utilizing high-purity carbon dioxide sources for algae cultivation and biofuel production in the United States: Opportunities and challenges. Journal of Cleaner Production, 321, 128779. <https://doi.org/10.1016/j.jclepro.2021.128779>
+
+Wu, M., McBride, S., & Ha, M. (2023). Viability of Reclaiming Municipal Wastewater for Potential Microalgae-Based Biofuel Production in the U.S. Water, 15(17), 3123. <https://doi.org/10.3390/w15173123>
+
+Xu, H., Lee, U., Coleman, A. M., Wigmosta, M. S., & Wang, M. (2019). Assessment of algal biofuel resource potential in the United States with consideration of regional water stress. Algal Research, 37, 30–39. <https://doi.org/10.1016/j.algal.2018.11.002>
 
